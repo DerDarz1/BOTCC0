@@ -1,0 +1,45 @@
+import asyncio
+from playwright.async_api import async_playwright
+import os
+import requests
+
+DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK")
+
+async def notify_discord(message):
+    if not DISCORD_WEBHOOK:
+        print("Brak webhooka Discord")
+        return
+    try:
+        response = requests.post(DISCORD_WEBHOOK, json={"content": message})
+        if response.status_code == 204:
+            print("Wysłano powiadomienie na Discord")
+        else:
+            print(f"Błąd webhooka Discord: {response.status_code}")
+    except Exception as e:
+        print(f"Błąd wysyłania powiadomienia: {e}")
+
+async def check_button():
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+        await page.goto("https://case-clicker.com/")
+        badge = await page.wait_for_selector('.mantine-Badge-root')
+        color = await badge.evaluate("(el) => getComputedStyle(el).getPropertyValue('--badge-bg')")
+        if "green" in color:
+            await notify_discord("Przycisk jest zielony - nic nie robię.")
+        else:
+            button = await page.query_selector('button.mantine-ActionIcon-root')
+            if button:
+                await button.click()
+                await notify_discord("Przycisk był czerwony - kliknięto go.")
+            else:
+                await notify_discord("Nie znalazłem przycisku.")
+        await browser.close()
+
+async def main():
+    while True:
+        await check_button()
+        await asyncio.sleep(60)
+
+if __name__ == "__main__":
+    asyncio.run(main())
